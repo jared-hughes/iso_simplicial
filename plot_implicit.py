@@ -1,6 +1,6 @@
 import numpy as np
 from generate_quadtree import generate_quadtree
-from collections import deque
+from quadtree import Rect
 
 
 def weighted_intersection(p1, p2, v1, v2):
@@ -33,9 +33,9 @@ def march_simplex(points, values):
         pass
 
 
-def plot_implicit(left, right, bottom, top, fn, gradient):
+def plot_implicit(bounds: Rect, fn, gradient):
     """Yields an iterator of line segments (point, point)"""
-    quadtree = generate_quadtree(left, right, bottom, top, fn, gradient, 5)
+    quadtree = generate_quadtree(bounds, fn, gradient, 5)
     for leaf in quadtree.leaves():
         duals = list(leaf.all_duals())
         duals_rotated = [*duals[1:], duals[0]]

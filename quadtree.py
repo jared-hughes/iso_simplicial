@@ -19,13 +19,18 @@ def extract_yz(p):
     return np.array([p[1], p[2]])
 
 
-class Quadtree:
-    def __init__(self, left, right, bottom, top, depth: int):
+@dataclass
+class Rect:
+    left: float
+    right: float
+    bottom: float
+    top: float
+
+
+class Quadtree(Rect):
+    def __init__(self, bounds: Rect, depth: int):
         """+x to the right, +y to the top, so right>left and top>bottom"""
-        self.left = left
-        self.right = right
-        self.bottom = bottom
-        self.top = top
+        super().__init__(bounds.left, bounds.right, bounds.bottom, bounds.top)
         self.depth = depth
         self.children: List[Quadtree] = []
 
@@ -35,10 +40,10 @@ class Quadtree:
         my = (self.top + self.bottom) / 2
         next_depth = self.depth + 1
         self.children = [
-            Quadtree(self.left, mx, my, self.top, next_depth),
-            Quadtree(mx, self.right, my, self.top, next_depth),
-            Quadtree(mx, self.right, self.bottom, my, next_depth),
-            Quadtree(self.left, mx, self.bottom, my, next_depth),
+            Quadtree(Rect(self.left, mx, my, self.top), next_depth),
+            Quadtree(Rect(mx, self.right, my, self.top), next_depth),
+            Quadtree(Rect(mx, self.right, self.bottom, my), next_depth),
+            Quadtree(Rect(self.left, mx, self.bottom, my), next_depth),
         ]
 
     def subdivide_to_depth(self, depth: int):
