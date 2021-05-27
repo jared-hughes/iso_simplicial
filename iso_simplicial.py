@@ -12,22 +12,21 @@ gradient is not defined are sharp features of the function.
 
 
 def fn(x, y):
-    # Throwing in the sines to be able to test edge duals that are not just centered
-    return x ** 2 + 4 * y ** 2 - 4 + x * y + 2 * np.sin(x) + 0.5 * np.sin(5 * y)
+    return np.sin(x) + np.sin(y) + 0.1 * x - 0.5
 
 
 def gradient(x, y):
     # Could always be lazy and just do finite differences.
     # I'm sure numpy has something built-in that uses some limiting process.
     # Analytic is faster though
-    return np.array([2 * x + y + 2 * np.cos(x), 8 * y + x + 2.5 * np.cos(5 * y)])
+    return np.array([np.cos(x) + 0.1, np.cos(y)])
 
 
-segments = plot_implicit(-3, 2, -2, 2, fn, gradient)
+segments = plot_implicit(-6, 5, -7, 7, fn, gradient)
 
 # format to paste into Desmos to visualize segments
 print(
-    R"P_{iso}=\left["
+    R"\P_{iso}=\left["
     + ",".join(
         [
             f"({segment[0][0]},{segment[0][1]}),"
