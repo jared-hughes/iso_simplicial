@@ -41,16 +41,19 @@ class Quadtree:
             Quadtree(self.left, mx, self.bottom, my, next_depth),
         ]
 
-    def subdivide_to_depth(self, depth: int, fn, gradient):
-        """Perform uniform subdivision until the quadtree reaches a depth of `depth`"""
+    def subdivide_to_depth(self, depth: int):
+        """Perform uniform subdivision until the quadtree reaches a depth of `depth`.
+        Returns the list of all leaf quads"""
+        # use list() to ensure we run through the entire iterator
+        return list(self._subdivide_to_depth(depth))
+
+    def _subdivide_to_depth(self, depth: int):
         if depth > self.depth:
             self.subdivide()
             for quad in self.children:
-                quad.subdivide_to_depth(depth, fn, gradient)
-        # in the future, only compute duals for minimal cells, i.e
-        # don't compute a dual on the right side of a quad if the quad to its right
-        # is subdivided
-        self.compute_duals(fn, gradient)
+                yield from quad._subdivide_to_depth(depth)
+        else:
+            yield self
 
     def shrunk_bounds(self):
         # any number > 0 should work to avoid degenerate triangles
@@ -116,8 +119,8 @@ class Quadtree:
         result = scipy.optimize.lsq_linear(
             normals, B, bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf])
         )
-        # (note for later: result.cost and result.optimality)
-        # might want to consider result.success
+        # should be 0 around linear regions, greater around high-curvature regions
+        self.error = result.cost
         return result.x
 
     def compute_duals(self, fn, gradient):
@@ -132,6 +135,7 @@ class Quadtree:
             [self.left, self.bottom],
         ]
         values = [fn(v[0], v[1]) for v in vertices]
+        self.vertex_values = values
         gradients = [gradient(v[0], v[1]) for v in vertices]
         normals = [np.array([g[0], g[1], -1]) for g in gradients]
         normals = np.array([n / np.linalg.norm(n) for n in normals])
@@ -139,7 +143,9 @@ class Quadtree:
             [[v[0], v[1], value] for v, value in zip(vertices, values)]
         )
         self.edge_duals = self.compute_edge_duals(vertices3d, normals)
+        self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
         self.face_dual = self.compute_face_dual(vertices3d, normals)
+        self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
 
     def __str__(self):
         return f"Quadtree[depth={self.depth}, {self.left}≤x≤{self.right}, {self.bottom}≤y≤{self.top}, children:{len(self.children)}]"

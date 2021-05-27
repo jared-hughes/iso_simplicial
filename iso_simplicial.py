@@ -24,10 +24,3 @@ def gradient(x, y):
 
 
 quadtree = generate_quadtree(-2, 2, -2, 2, fn, gradient, 3)
-
-print(fn(1, 1))
-print(gradient(1, 1))
-quad = quadtree.children[2].children[1]
-print(quad)
-print(np.round(quad.edge_duals, 4))
-print(np.round(quad.face_dual, 4))
