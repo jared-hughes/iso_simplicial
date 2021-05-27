@@ -5,10 +5,10 @@ a simple method to create an octree that conforms well to the
 isosurface using the error metric from Section 3
 """
 
-from quadtree import Quadtree, Rect
+from quadtree import Quadtree
 
 
-def generate_quadtree(region: Rect, fn, gradient, uniform_depth: int = 3):
+def generate_quadtree(left, right, bottom, top, fn, gradient, uniform_depth: int = 3):
     """we use a top-down contour-finding approach
     that adds cells to the tree by refining the sampling around
     detected contours"""
@@ -21,8 +21,8 @@ def generate_quadtree(region: Rect, fn, gradient, uniform_depth: int = 3):
     detect all features greater than the size of a cube in the uni-
     form grid"""
 
-    quadtree = Quadtree(region, 0)
-    quadtree.subdivide_to_depth(uniform_depth)
+    quadtree = Quadtree(left, right, bottom, top, 0)
+    quadtree.subdivide_to_depth(uniform_depth, fn, gradient)
 
     return quadtree
 

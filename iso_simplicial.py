@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from quadtree import Rect
 from generate_quadtree import generate_quadtree
 
 """
@@ -13,15 +12,22 @@ gradient is not defined are sharp features of the function.
 
 
 def fn(x, y):
-    return x ** 2 + 4 * y ** 2 - 2 * y - 2 + x * y
+    # Throwing in the sines to be able to test edge duals that are not just centered
+    return x ** 2 + 4 * y ** 2 - 4 + x * y + 2 * np.sin(x) + 0.5 * np.sin(5 * y)
 
 
 def gradient(x, y):
-    return np.array([2 * x + y, 8 * y - 2 + x])
+    # Could always be lazy and just do finite differences.
+    # I'm sure numpy has something built-in that uses some limiting process.
+    # Analytic is faster though
+    return np.array([2 * x + y + 2 * np.cos(x), 8 * y + x + 2.5 * np.cos(5 * y)])
 
 
-quadtree = generate_quadtree(Rect(-2, 2, -2, 2), fn, gradient, 3)
+quadtree = generate_quadtree(-2, 2, -2, 2, fn, gradient, 3)
 
 print(fn(1, 1))
 print(gradient(1, 1))
-print(quadtree.children[0].boundary)
+quad = quadtree.children[2].children[1]
+print(quad)
+print(np.round(quad.edge_duals, 4))
+print(np.round(quad.face_dual, 4))
