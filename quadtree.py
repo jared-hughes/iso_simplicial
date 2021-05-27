@@ -71,35 +71,39 @@ class Quadtree:
         # instead of finding the minimum, then clipping to the bounds
         x_min, x_max, y_min, y_max = self.shrunk_bounds()
         edge_duals_horiz = [
-            [
-                np.clip(
-                    intersect_normals(
-                        extract_xz(vertices_3d[i]),
-                        extract_xz(vertices_3d[j]),
-                        extract_xz(normals[i]),
-                        extract_xz(normals[j]),
+            np.array(
+                [
+                    np.clip(
+                        intersect_normals(
+                            extract_xz(vertices_3d[i]),
+                            extract_xz(vertices_3d[j]),
+                            extract_xz(normals[i]),
+                            extract_xz(normals[j]),
+                        ),
+                        x_min,
+                        x_max,
                     ),
-                    x_min,
-                    x_max,
-                ),
-                vertices_3d[i][1],
-            ]
+                    vertices_3d[i][1],
+                ]
+            )
             for i, j in [(0, 1), (2, 3)]
         ]
         edge_duals_vert = [
-            [
-                vertices_3d[i][0],
-                np.clip(
-                    intersect_normals(
-                        extract_yz(vertices_3d[i]),
-                        extract_yz(vertices_3d[j]),
-                        extract_yz(normals[i]),
-                        extract_yz(normals[j]),
+            np.array(
+                [
+                    vertices_3d[i][0],
+                    np.clip(
+                        intersect_normals(
+                            extract_yz(vertices_3d[i]),
+                            extract_yz(vertices_3d[j]),
+                            extract_yz(normals[i]),
+                            extract_yz(normals[j]),
+                        ),
+                        y_min,
+                        y_max,
                     ),
-                    y_min,
-                    y_max,
-                ),
-            ]
+                ]
+            )
             for i, j in [(1, 2), (3, 0)]
         ]
         # clockwise from the top edge
@@ -121,31 +125,54 @@ class Quadtree:
         )
         # should be 0 around linear regions, greater around high-curvature regions
         self.error = result.cost
-        return result.x
+        return result.x[0:2]
 
     def compute_duals(self, fn, gradient):
         """Insert dual vertices. In the future, this should only by done for minimal cells
         and should avoid duplicating calculation of `gradient` over the same points for vertices
         shared between two edges"""
         # precalculations
-        vertices = [
+        self.vertices = [
             [self.left, self.top],
             [self.right, self.top],
             [self.right, self.bottom],
             [self.left, self.bottom],
         ]
-        values = [fn(v[0], v[1]) for v in vertices]
+        values = [fn(v[0], v[1]) for v in self.vertices]
         self.vertex_values = values
-        gradients = [gradient(v[0], v[1]) for v in vertices]
+        gradients = [gradient(v[0], v[1]) for v in self.vertices]
         normals = [np.array([g[0], g[1], -1]) for g in gradients]
         normals = np.array([n / np.linalg.norm(n) for n in normals])
         vertices3d = np.array(
-            [[v[0], v[1], value] for v, value in zip(vertices, values)]
+            [[v[0], v[1], value] for v, value in zip(self.vertices, values)]
         )
         self.edge_duals = self.compute_edge_duals(vertices3d, normals)
         self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
         self.face_dual = self.compute_face_dual(vertices3d, normals)
         self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
+
+    def directional_duals(self, direction: int):
+        """All edge duals, including children, in clockwise order as an iterator
+        of tuples (xy position, value)
+        Direction: 0=top, 1=right, 2=bottom, 3=left"""
+        if len(self.children) != 0:
+            yield from self.children[direction].directional_duals(direction)
+        yield (self.edge_duals[direction], self.edge_dual_values[direction])
+        if len(self.children) != 0:
+            yield from self.children[(direction + 1) % 4].directional_duals(direction)
+
+    def all_duals(self):
+        """All duals, including children, in clockwise order as an iterator of
+        tuples (xy position, value)"""
+        for i in range(4):
+            yield (self.vertices[i], self.vertex_values[i])
+            yield from self.directional_duals(i)
+
+    def leaves(self):
+        if len(self.children) == 0:
+            yield self
+        for child in self.children:
+            yield from child.leaves()
 
     def __str__(self):
         return f"Quadtree[depth={self.depth}, {self.left}≤x≤{self.right}, {self.bottom}≤y≤{self.top}, children:{len(self.children)}]"

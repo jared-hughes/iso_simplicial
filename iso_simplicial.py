@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from generate_quadtree import generate_quadtree
+from plot_implicit import plot_implicit
 
 """
 We make no assumptions about F(p) other than that the
@@ -23,4 +23,18 @@ def gradient(x, y):
     return np.array([2 * x + y + 2 * np.cos(x), 8 * y + x + 2.5 * np.cos(5 * y)])
 
 
-quadtree = generate_quadtree(-2, 2, -2, 2, fn, gradient, 3)
+segments = plot_implicit(-3, 2, -2, 2, fn, gradient)
+
+# format to paste into Desmos to visualize segments
+print(
+    R"P_{iso}=\left["
+    + ",".join(
+        [
+            f"({segment[0][0]},{segment[0][1]}),"
+            + f"({segment[1][0]},{segment[1][1]}),"
+            + "(0/0,0/0)"
+            for segment in segments
+        ]
+    )
+    + R"\right]"
+)

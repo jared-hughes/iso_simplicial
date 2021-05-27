@@ -16,7 +16,7 @@ MAX_DEPTH = 10
 ERROR_THRESHOLD = 10 ** -5
 
 
-def generate_quadtree(left, right, bottom, top, fn, gradient, uniform_depth: int = 3):
+def generate_quadtree(left, right, bottom, top, fn, gradient, uniform_depth: int):
     """we use a top-down contour-finding approach
     that adds cells to the tree by refining the sampling around
     detected contours"""
@@ -39,7 +39,7 @@ def generate_quadtree(left, right, bottom, top, fn, gradient, uniform_depth: int
     down to a prescribed maximum depth."""
 
     # we use deque as a FIFO queue
-    # .append() to add and .popleft()
+    # (FIFO because we want a breadth of quads instead of a depth of quads in case of exceeding MAX_QUADS)
     quad_stack = deque(initial_leaves)
 
     num_quads = (len(initial_leaves) * 4 - 1) / 3
