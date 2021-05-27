@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from vector import Vector
+import numpy as np
 from quadtree import Rect
 from generate_quadtree import generate_quadtree
 
@@ -17,7 +17,7 @@ def fn(x, y):
 
 
 def gradient(x, y):
-    return Vector(2 * x + y, 8 * y - 2 + x)
+    return np.array([2 * x + y, 8 * y - 2 + x])
 
 
 quadtree = generate_quadtree(Rect(-2, 2, -2, 2), fn, gradient, 3)
