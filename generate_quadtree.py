@@ -10,16 +10,17 @@ from collections import deque
 import numpy as np
 
 # arbitrary, can probably be increased
-MAX_LEAVES = 10 ** 5
+MAX_LEAVES = 2 ** 14
 # descend uniformly up to MIN_DEPTH to capture coarse features
 MIN_DEPTH = 5
 # quantifies maximum acceptable deviation from local linearity
-ERROR_THRESHOLD = 10 ** -5
+# TODO: This should not be used as a constant because double the function = double the error
+ERROR_THRESHOLD = 10 ** -3
 # X_TOLERANCE and Y_TOLERANCE effectively determine the max depth
 # TODO: compute X and Y tolerance based on x-width and y-width
 #   divided by the screen size (pixels) to exclude details smaller than a pixel
-X_TOLERANCE = 0.001
-Y_TOLERANCE = 0.001
+X_TOLERANCE = 0.02
+Y_TOLERANCE = 0.02
 
 
 def should_descend_quadtree(quad: Quadtree, fn, bounds):

@@ -125,9 +125,7 @@ class Quadtree(Rect):
                 [shrunk_region.right, shrunk_region.top, np.inf],
             ),
         )
-        # should be 0 around linear regions, greater around high-curvature regions
-        self.error = result.cost
-        return result.x[0:2]
+        return result.x
 
     def compute_duals(self, fn, gradient):
         """Insert dual vertices. In the future, this should only by done for minimal cells
@@ -151,8 +149,10 @@ class Quadtree(Rect):
         shrunk_region = self.shrunk_by(0.01)
         self.edge_duals = self.compute_edge_duals(vertices3d, normals, shrunk_region)
         self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
-        self.face_dual = self.compute_face_dual(vertices3d, normals, shrunk_region)
+        fd = self.compute_face_dual(vertices3d, normals, shrunk_region)
+        self.face_dual = fd[0:2]
         self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
+        self.error = np.abs(self.face_dual_value - fd[2])
 
     def directional_duals(self, direction: int):
         """All edge duals, including children, in clockwise order as an iterator
