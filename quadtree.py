@@ -179,3 +179,17 @@ class Quadtree(Rect):
 
     def __str__(self):
         return f"Quadtree[depth={self.depth}, {self.left}≤x≤{self.right}, {self.bottom}≤y≤{self.top}, children:{len(self.children)}]"
+
+    def visualize_borders(self):
+        """Returns a list of points [x: str | float, y: str | float] which draw the quadtree when connected in Desmos"""
+        if len(self.children) > 0:
+            mx = (self.left + self.right) / 2
+            my = (self.top + self.bottom) / 2
+            yield [mx, self.top]
+            yield [mx, self.bottom]
+            yield ["0/0", "0"]
+            yield [self.left, my]
+            yield [self.right, my]
+            yield ["0/0", "0"]
+        for child in self.children:
+            yield from child.visualize_borders()
