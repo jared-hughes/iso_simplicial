@@ -23,7 +23,7 @@ def gradient(x, y):
     return np.array([np.cos(x) + 0.1, np.cos(y)])
 
 
-segments = plot_implicit(Rect(-6, 5, -7, 7), fn, gradient)
+segments = plot_implicit(Rect(-6.2, 4.8, -7, 7), fn, gradient)
 
 # format to paste into Desmos to visualize segments
 print(

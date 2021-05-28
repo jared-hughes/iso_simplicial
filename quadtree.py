@@ -26,6 +26,23 @@ class Rect:
     bottom: float
     top: float
 
+    @property
+    def width(self):
+        return self.right - self.left
+
+    @property
+    def height(self):
+        return self.top - self.bottom
+
+    def shrunk_by(self, e):
+        """e = proportion shrink. Any number > 0 should work to avoid degenerate triangles"""
+        return Rect(
+            e * self.right + (1 - e) * self.left,
+            e * self.left + (1 - e) * self.right,
+            e * self.top + (1 - e) * self.bottom,
+            e * self.bottom + (1 - e) * self.top,
+        )
+
 
 class Quadtree(Rect):
     def __init__(self, bounds: Rect, depth: int):
@@ -34,47 +51,23 @@ class Quadtree(Rect):
         self.depth = depth
         self.children: List[Quadtree] = []
 
-    def subdivide(self):
+    def generate_children(self):
         """Uniform subdivision"""
         mx = (self.left + self.right) / 2
         my = (self.top + self.bottom) / 2
         next_depth = self.depth + 1
-        self.children = [
+        return [
             Quadtree(Rect(self.left, mx, my, self.top), next_depth),
             Quadtree(Rect(mx, self.right, my, self.top), next_depth),
             Quadtree(Rect(mx, self.right, self.bottom, my), next_depth),
             Quadtree(Rect(self.left, mx, self.bottom, my), next_depth),
         ]
 
-    def subdivide_to_depth(self, depth: int):
-        """Perform uniform subdivision until the quadtree reaches a depth of `depth`.
-        Returns the list of all leaf quads"""
-        # use list() to ensure we run through the entire iterator
-        return list(self._subdivide_to_depth(depth))
-
-    def _subdivide_to_depth(self, depth: int):
-        if depth > self.depth:
-            self.subdivide()
-            for quad in self.children:
-                yield from quad._subdivide_to_depth(depth)
-        else:
-            yield self
-
-    def shrunk_bounds(self):
-        # any number > 0 should work to avoid degenerate triangles
-        BOUND_EPSILON = 0.01
-        return BOUND_EPSILON * np.array(
-            [self.right, self.left, self.top, self.bottom]
-        ) + (1 - BOUND_EPSILON) * np.array(
-            [self.left, self.right, self.bottom, self.top]
-        )
-
-    def compute_edge_duals(self, vertices_3d, normals):
+    def compute_edge_duals(self, vertices_3d, normals, shrunk_region):
         # Could probably use scipy.optimize here like in compute_face_dual
         # Though it might be slower than just solving for the intersection
         # Pro of scipy.optimize: it would find the minimum inside the bounds
         # instead of finding the minimum, then clipping to the bounds
-        x_min, x_max, y_min, y_max = self.shrunk_bounds()
         edge_duals_horiz = [
             np.array(
                 [
@@ -85,8 +78,8 @@ class Quadtree(Rect):
                             extract_xz(normals[i]),
                             extract_xz(normals[j]),
                         ),
-                        x_min,
-                        x_max,
+                        shrunk_region.left,
+                        shrunk_region.right,
                     ),
                     vertices_3d[i][1],
                 ]
@@ -104,8 +97,8 @@ class Quadtree(Rect):
                             extract_yz(normals[i]),
                             extract_yz(normals[j]),
                         ),
-                        y_min,
-                        y_max,
+                        shrunk_region.bottom,
+                        shrunk_region.top,
                     ),
                 ]
             )
@@ -119,14 +112,18 @@ class Quadtree(Rect):
             edge_duals_vert[1],
         ]
 
-    def compute_face_dual(self, vertices_3d, normals):
+    def compute_face_dual(self, vertices_3d, normals, shrunk_region):
         """The normals in XYZ, coupled with the vertices_3d, define four hyperplanes. The goal is to find
         the point that minimizes the sum of squared distance from the four hyperplanes"""
         B = [np.dot(n, p) for n, p in zip(normals, vertices_3d)]
 
-        x_min, x_max, y_min, y_max = self.shrunk_bounds()
         result = scipy.optimize.lsq_linear(
-            normals, B, bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf])
+            normals,
+            B,
+            bounds=(
+                [shrunk_region.left, shrunk_region.bottom, -np.inf],
+                [shrunk_region.right, shrunk_region.top, np.inf],
+            ),
         )
         # should be 0 around linear regions, greater around high-curvature regions
         self.error = result.cost
@@ -151,9 +148,10 @@ class Quadtree(Rect):
         vertices3d = np.array(
             [[v[0], v[1], value] for v, value in zip(self.vertices, values)]
         )
-        self.edge_duals = self.compute_edge_duals(vertices3d, normals)
+        shrunk_region = self.shrunk_by(0.01)
+        self.edge_duals = self.compute_edge_duals(vertices3d, normals, shrunk_region)
         self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
-        self.face_dual = self.compute_face_dual(vertices3d, normals)
+        self.face_dual = self.compute_face_dual(vertices3d, normals, shrunk_region)
         self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
 
     def directional_duals(self, direction: int):
