@@ -4,6 +4,7 @@ from generate_quadtree import generate_quadtree
 import numpy as np
 from plot_implicit import plot_implicit
 from quadtree import Rect
+import cProfile, pstats
 
 """
 We make no assumptions about F(p) other than that the
@@ -31,7 +32,13 @@ examples = [
 
 fn, bounds = examples[0]
 
-segments = plot_implicit(bounds, fn)
+profiler = cProfile.Profile()
+profiler.enable()
+segments = list(plot_implicit(bounds, fn))
+profiler.disable()
+with open("profile.log", "w") as stream:
+    stats = pstats.Stats(profiler, stream=stream).sort_stats("cumtime")
+    stats.print_stats()
 
 # format to paste into Desmos to visualize segments
 # to paste easily, run the following in dev tools console with the output from this file piped into the clipboard:
