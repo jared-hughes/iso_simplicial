@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Callable
 from dataclasses import dataclass
 import numpy as np
 import scipy.optimize
@@ -38,10 +38,6 @@ class Rect:
         )
 
 
-def extract_xy(p):
-    return np.array([p[0], p[1]])
-
-
 def get_dual_point_between(p1, p2, fn):
     """Assumes the value of the points are not NaN/Infinity and
     they are stored as [x, y, f(x,y)]"""
@@ -72,93 +68,141 @@ def lerpByZ(p1, p2):
     if np.sign(p1[2]) == np.sign(p2[2]):
         # give up, but don't throw an error
         return (p1 + p2) / 2
-    return extract_xy((p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2]))
+    return (p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2])
 
 
-class Quadtree(Rect):
-    def __init__(self, bounds: Rect, depth: int):
-        """+x to the right, +y to the top, so right>left and top>bottom"""
-        super().__init__(bounds.left, bounds.right, bounds.bottom, bounds.top)
+class Quadtree:
+    def __init__(
+        self,
+        vertices: List[np.ndarray],
+        depth: int,
+        fn: Callable[[float, float], float],
+    ):
+        """Vertices are a list of (x, y, f(x,y)) values"""
+        self.vertices = vertices
         self.depth = depth
+        self.fn = fn
         self.children: List[Quadtree] = []
 
-    def generate_children(self):
+    def _apply_func_to(self, p: np.ndarray):
+        """Mutates p"""
+        p[2] = self.fn(p[0], p[1])
+        return p
+
+    def apply_func_to_vertices(self):
+        for v in self.vertices:
+            self._apply_func_to(v)
+
+    def _construct_point(self, x: float, y: float):
+        return np.array([x, y, self.fn(x, y)])
+
+    def compute_midpoints(self):
+        center = 0.5 * (self.vertices[0] + self.vertices[2])
+        self.edge_midpoints = (
+            self._construct_point(center[0], self.vertices[0][1]),
+            self._construct_point(self.vertices[1][0], center[1]),
+            self._construct_point(center[0], self.vertices[2][1]),
+            self._construct_point(self.vertices[0][0], center[1]),
+        )
+        self.center_midpoint = self._construct_point(center[0], center[1])
+
+    def compute_children(self):
         """Uniform subdivision"""
-        mx = (self.left + self.right) / 2
-        my = (self.top + self.bottom) / 2
+        self.compute_midpoints()
         next_depth = self.depth + 1
-        return [
-            Quadtree(Rect(self.left, mx, my, self.top), next_depth),
-            Quadtree(Rect(mx, self.right, my, self.top), next_depth),
-            Quadtree(Rect(mx, self.right, self.bottom, my), next_depth),
-            Quadtree(Rect(self.left, mx, self.bottom, my), next_depth),
+        self.children = [
+            Quadtree(
+                (
+                    self.vertices[0],
+                    self.edge_midpoints[0],
+                    self.center_midpoint,
+                    self.edge_midpoints[3],
+                ),
+                next_depth,
+                self.fn,
+            ),
+            Quadtree(
+                (
+                    self.edge_midpoints[0],
+                    self.vertices[1],
+                    self.edge_midpoints[1],
+                    self.center_midpoint,
+                ),
+                next_depth,
+                self.fn,
+            ),
+            Quadtree(
+                (
+                    self.center_midpoint,
+                    self.edge_midpoints[1],
+                    self.vertices[2],
+                    self.edge_midpoints[2],
+                ),
+                next_depth,
+                self.fn,
+            ),
+            Quadtree(
+                (
+                    self.edge_midpoints[3],
+                    self.center_midpoint,
+                    self.edge_midpoints[2],
+                    self.vertices[3],
+                ),
+                next_depth,
+                self.fn,
+            ),
         ]
 
-    def compute_edge_duals(self, vertices_3d, fn, shrunk_region):
+    def _get_edge_duals(self):
         return [
-            extract_xy(get_dual_point_between(vertices_3d[i], vertices_3d[j], fn))
+            self._apply_func_to(
+                get_dual_point_between(self.vertices[i], self.vertices[j], self.fn)
+            )
             for i, j in CYCLIC_PAIRS
         ]
 
-    def compute_face_dual(self, vertices_3d, fn, shrunk_region):
+    def _get_face_dual(self):
         # return the center between two diagonal vertices as long as the function value
         # at the center has a different function sign than the two diagonals
-        a, b, c, d = vertices_3d
+        a, b, c, d = self.vertices
         if np.sign(a[2]) == np.sign(c[2]):
-            center = get_dual_point_between(a, c, fn)
-            if np.sign(fn(center[0], center[1])) != np.sign(a[2]):
+            center = get_dual_point_between(a, c, self.fn)
+            if np.sign(self.fn(center[0], center[1])) != np.sign(a[2]):
                 return center
         if np.sign(b[2]) == np.sign(d[2]):
-            center = get_dual_point_between(b, d, fn)
-            if np.sign(fn(center[0], center[1])) != np.sign(b[2]):
+            center = get_dual_point_between(b, d, self.fn)
+            if np.sign(self.fn(center[0], center[1])) != np.sign(b[2]):
                 return center
-        return (a + c) / 2
+        return self._apply_func_to((a + c) / 2)
 
-    def compute_duals(self, fn):
-        """Insert dual vertices. In the future, this should only by done for minimal cells
-        and should avoid duplicating calculation of `gradient` over the same points for vertices
-        shared between two edges"""
-        # precalculations
-        self.vertices = [
-            [self.left, self.top],
-            [self.right, self.top],
-            [self.right, self.bottom],
-            [self.left, self.bottom],
-        ]
-        values = [fn(v[0], v[1]) for v in self.vertices]
-        self.vertex_values = values
-        vertices3d = np.array(
-            [[v[0], v[1], value] for v, value in zip(self.vertices, values)]
-        )
-        shrunk_region = self.shrunk_by(0.01)
-        self.edge_duals = self.compute_edge_duals(vertices3d, fn, shrunk_region)
-        self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
-        fd = self.compute_face_dual(vertices3d, fn, shrunk_region)
-        self.face_dual = fd[0:2]
-        self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
+    def compute_duals(self):
+        """Insert dual vertices. In the future, this should only be done for minimal cells"""
+        self.edge_duals = self._get_edge_duals()
+        self.face_dual = self._get_face_dual()
         self.nonlinearity = np.max(
             [
-                nonlinearity_along_edge(vertices3d[i], vertices3d[j], fn)
+                nonlinearity_along_edge(self.vertices[i], self.vertices[j], self.fn)
                 for i, j in CYCLIC_PAIRS + [(0, 2), (1, 3)]
             ]
         )
 
-    def directional_duals(self, direction: int):
+    """ Following are debug functions """
+
+    def _directional_duals(self, direction: int):
         """All edge duals, including children, in clockwise order as an iterator
         of tuples (xy position, value)
         Direction: 0=top, 1=right, 2=bottom, 3=left"""
         if len(self.children) != 0:
-            yield from self.children[direction].directional_duals(direction)
-        yield (self.edge_duals[direction], self.edge_dual_values[direction])
+            yield from self.children[direction]._directional_duals(direction)
+        yield self.edge_duals[direction]
         if len(self.children) != 0:
-            yield from self.children[(direction + 1) % 4].directional_duals(direction)
+            yield from self.children[(direction + 1) % 4]._directional_duals(direction)
 
     def all_duals(self):
-        """All edge duals and vertices, including children, in clockwise order as an iterator of
-        tuples (xy position, value)"""
+        """All edge duals and vertices, including children, in clockwise order"""
         for i in range(4):
-            yield (self.vertices[i], self.vertex_values[i])
-            yield from self.directional_duals(i)
+            yield self.vertices[i]
+            yield from self._directional_duals(i)
 
     def leaves(self):
         if len(self.children) == 0:
@@ -172,20 +216,18 @@ class Quadtree(Rect):
     def visualize_borders(self):
         """Returns a list of points [x: str | float, y: str | float] which draw the quadtree when connected in Desmos"""
         if len(self.children) > 0:
-            mx = (self.left + self.right) / 2
-            my = (self.top + self.bottom) / 2
-            yield [mx, self.top]
-            yield [mx, self.bottom]
+            yield self.edge_midpoints[0]
+            yield self.edge_midpoints[2]
             yield ["0/0", "0"]
-            yield [self.left, my]
-            yield [self.right, my]
+            yield self.edge_midpoints[3]
+            yield self.edge_midpoints[1]
             yield ["0/0", "0"]
         for child in self.children:
             yield from child.visualize_borders()
 
     def leaf_all_duals(self):
         if len(self.children) == 0:
-            yield from map(lambda lr: lr[0], self.all_duals())
+            yield from self.all_duals()
         for child in self.children:
             yield from child.leaf_all_duals()
 
@@ -194,3 +236,11 @@ class Quadtree(Rect):
             yield self.face_dual
         for child in self.children:
             yield from child.leaf_face_duals()
+
+    @property
+    def width(self):
+        return self.vertices[1][0] - self.vertices[0][0]
+
+    @property
+    def height(self):
+        return self.vertices[1][1] - self.vertices[2][1]

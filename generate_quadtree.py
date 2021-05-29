@@ -35,10 +35,12 @@ def should_descend_quadtree(quad: Quadtree, fn, bounds):
     #   to test for isoline intersection. This will remove the need to compute duals on
     #   non-leaf quads (saving time) but will reduce the power of the test
     #   (greater chance to not detect an intersection)
-    values = np.array(
-        [*quad.vertex_values, *quad.edge_dual_values, quad.face_dual_value]
-    )
-    intersects_isoline = np.any(values > 0) and np.any(values < 0)
+    intersects_isoline = False
+    sign = np.sign(quad.face_dual[2])
+    for v in [*quad.vertices, *quad.edge_duals]:
+        if np.sign(v[2]) != sign:
+            intersects_isoline = True
+            break
 
     """ We use an error criterion simply
     to avoid refinement in regions of the function that are well
@@ -63,7 +65,17 @@ def generate_quadtree(bounds: Rect, fn):
     detect all features greater than the size of a cube in the uni-
     form grid"""
 
-    quadtree = Quadtree(bounds, 0)
+    quadtree = Quadtree(
+        [
+            np.array([bounds.left, bounds.top, 0]),
+            np.array([bounds.right, bounds.top, 0]),
+            np.array([bounds.right, bounds.bottom, 0]),
+            np.array([bounds.left, bounds.bottom, 0]),
+        ],
+        0,
+        fn,
+    )
+    quadtree.apply_func_to_vertices()
 
     """Then, we analyze F(p) at the dual vertices of
     each cube. We refine each cube that the dual vertices indicate
@@ -83,9 +95,9 @@ def generate_quadtree(bounds: Rect, fn):
         #  - in should_descend_quadtree, to test if the isoline crosses through the quad
         #  - in leaf nodes, to compute the segments
         # TODO: precompute the function values at midpoints and center, to save time in child nodes
-        current_quad.compute_duals(fn)
+        current_quad.compute_duals()
         if should_descend_quadtree(current_quad, fn, bounds):
-            current_quad.children = current_quad.generate_children()
+            current_quad.compute_children()
             for child in current_quad.children:
                 quad_stack.append(child)
             # add 4 for the new quads, subtract 1 for the old quad not being a leaf anymore
@@ -99,6 +111,6 @@ def generate_quadtree(bounds: Rect, fn):
             pass
     # compute duals of leaves in case of breaking early
     for leaf_quad in quad_stack:
-        leaf_quad.compute_duals(fn)
+        leaf_quad.compute_duals()
 
     return quadtree
