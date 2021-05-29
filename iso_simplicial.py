@@ -12,35 +12,53 @@ dient is well-defined almost everywhere. Places where the
 gradient is not defined are sharp features of the function.
 """
 
+examples = [
+    [lambda x, y: y - np.sin(5 * x), Rect(-2, 2, -1.5, 1.5)],
+    [lambda x, y: x * x + y * y - 4, Rect(-3, 3, -3, 3)],
+    [lambda x, y: y * (x - y) ** 2 - 4 * x - 8, Rect(-6, 8, -6, 6)],
+    [lambda x, y: y ** 2 - x ** 3 + x, Rect(-2, 2, -2, 2)],
+    [
+        lambda x, y: x ** 2
+        + 4 * y ** 2
+        - 4
+        + x * y
+        + 5 * np.sin(5 * x)
+        + 5 * np.sin(5 * y),
+        Rect(-4, 4, -2, 2),
+    ],
+    [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
+]
 
-def fn(x, y):
-    return y - np.sin(5 * x)
+fn, bounds = examples[0]
 
-
-bounds = Rect(-6.2, 4.8, -7, 7)
 segments = plot_implicit(bounds, fn)
 
 # format to paste into Desmos to visualize segments
 # to paste easily, run the following in dev tools console with the output from this file piped into the clipboard:
-# setTimeout(() => {window.navigator.clipboard.readText().then(text => text.split("\n").map((line, i) => Calc.setExpression({id: `clip_${i}`, latex: line, lines: true})))}, 1000)
+# setTimeout(() => {window.navigator.clipboard.readText().then(text => text.split("\n").map((line, i) => Calc.setExpression({id: `clip_${i}`, latex: line, lines: i < 2})))}, 1000)
 # Use https://gist.github.com/jared-hughes/1bab5d94e2ad0ab326180a21e3f955c0 to bypass Desmos's 10000 point limit
-print(
-    R"\P_{iso}=\left["
-    + ",".join(
-        [
-            f"({segment[0][0]},{segment[0][1]}),"
-            + f"({segment[1][0]},{segment[1][1]}),"
-            + "(0/0,0/0)"
-            for segment in segments
-        ]
-    )
-    + R"\right]"
-)
+def pointLatex(p):
+    return f"({p[0]},{p[1]})"
+
+
+def listLatex(L):
+    return R"\left[" + ",".join(L) + R"\right]"
+
+
+def pointListLatex(L):
+    return listLatex(map(pointLatex, L))
+
 
 print(
-    R"\P_{quad}=\left["
-    + ",".join(
-        [f"({p[0]}, {p[1]})" for p in generate_quadtree(bounds, fn).visualize_borders()]
+    R"\P_{iso}="
+    + listLatex(
+        f"{pointLatex(segment[0])},{pointLatex(segment[1])},(0/0,0/0)"
+        for segment in segments
     )
-    + R"\right]"
 )
+
+quadtree = generate_quadtree(bounds, fn)
+
+print(R"\P_{quad}=" + pointListLatex(quadtree.visualize_borders()))
+print(R"\P_{faceDuals}=" + pointListLatex(quadtree.leaf_face_duals()))
+print(R"\P_{edgeDuals}=" + pointListLatex(quadtree.leaf_all_duals()))

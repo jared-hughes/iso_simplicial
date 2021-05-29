@@ -68,7 +68,10 @@ def get_dual_point_between(p1, p2, fn):
 
 
 def lerpByZ(p1, p2):
-    """Find the point along the line p1←→p2 where z=0"""
+    """Find the point along the segment p1--p2 where z=0"""
+    if np.sign(p1[2]) == np.sign(p2[2]):
+        # give up, but don't throw an error
+        return (p1 + p2) / 2
     return extract_xy((p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2]))
 
 
@@ -151,7 +154,7 @@ class Quadtree(Rect):
             yield from self.children[(direction + 1) % 4].directional_duals(direction)
 
     def all_duals(self):
-        """All duals, including children, in clockwise order as an iterator of
+        """All edge duals and vertices, including children, in clockwise order as an iterator of
         tuples (xy position, value)"""
         for i in range(4):
             yield (self.vertices[i], self.vertex_values[i])
@@ -179,3 +182,15 @@ class Quadtree(Rect):
             yield ["0/0", "0"]
         for child in self.children:
             yield from child.visualize_borders()
+
+    def leaf_all_duals(self):
+        if len(self.children) == 0:
+            yield from map(lambda lr: lr[0], self.all_duals())
+        for child in self.children:
+            yield from child.leaf_all_duals()
+
+    def leaf_face_duals(self):
+        if len(self.children) == 0:
+            yield self.face_dual
+        for child in self.children:
+            yield from child.leaf_face_duals()
