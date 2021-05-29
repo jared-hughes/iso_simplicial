@@ -3,6 +3,15 @@ from dataclasses import dataclass
 import numpy as np
 import scipy.optimize
 
+CYCLIC_PAIRS = [(0, 1), (1, 2), (2, 3), (3, 0)]
+
+
+def nonlinearity_along_edge(p1, p2, fn):
+    midpoint = (p1 + p2) / 2
+    return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / np.max(
+        np.abs([p1[2], p2[2]])
+    )
+
 
 @dataclass
 class Rect:
@@ -85,7 +94,7 @@ class Quadtree(Rect):
     def compute_edge_duals(self, vertices_3d, fn, shrunk_region):
         return [
             extract_xy(get_dual_point_between(vertices_3d[i], vertices_3d[j], fn))
-            for i, j in [(0, 1), (1, 2), (2, 3), (3, 0)]
+            for i, j in CYCLIC_PAIRS
         ]
 
     def compute_face_dual(self, vertices_3d, fn, shrunk_region):
@@ -124,6 +133,12 @@ class Quadtree(Rect):
         fd = self.compute_face_dual(vertices3d, fn, shrunk_region)
         self.face_dual = fd[0:2]
         self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
+        self.nonlinearity = np.max(
+            [
+                nonlinearity_along_edge(vertices3d[i], vertices3d[j], fn)
+                for i, j in CYCLIC_PAIRS + [(0, 2), (1, 3)]
+            ]
+        )
 
     def directional_duals(self, direction: int):
         """All edge duals, including children, in clockwise order as an iterator

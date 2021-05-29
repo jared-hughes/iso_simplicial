@@ -14,7 +14,7 @@ gradient is not defined are sharp features of the function.
 
 
 def fn(x, y):
-    return x ** 2 - y ** 2 - np.log(np.abs(x))
+    return y - np.sin(5 * x)
 
 
 bounds = Rect(-6.2, 4.8, -7, 7)

@@ -45,7 +45,7 @@ def should_descend_quadtree(quad: Quadtree, fn, bounds):
     approximated by a linear function such as flat regions of the
     isosurface."""
 
-    if intersects_isoline:
+    if intersects_isoline and quad.nonlinearity > 0.1:
         return True
     return False
 
