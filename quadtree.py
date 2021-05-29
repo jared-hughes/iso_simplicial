@@ -4,21 +4,6 @@ import numpy as np
 import scipy.optimize
 
 
-def intersect_normals(p, q, n, m):
-    """Given vertices p,q and normals n,m, return the intersection coordinate between the lines passing
-    through the vertices and perpendicular to the normals in XZ or YZ space. This coordinate would
-    need to be combined with the other coordinate back in XY space."""
-    return q[0] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
-
-
-def extract_xz(p):
-    return np.array([p[0], p[2]])
-
-
-def extract_yz(p):
-    return np.array([p[1], p[2]])
-
-
 @dataclass
 class Rect:
     left: float
@@ -44,6 +29,40 @@ class Rect:
         )
 
 
+def extract_xy(p):
+    return np.array([p[0], p[1]])
+
+
+def get_dual_point_between(p1, p2, fn):
+    """Assumes the value of the points are not NaN/Infinity and
+    they are stored as [x, y, f(x,y)]"""
+    if np.sign(p1[2]) != np.sign(p2[2]):
+        # the isoline passes somewhere between p1 and p2, so place a dual point mid-way
+        # Maybe doing a lerp of projected gradients would be better
+        return 0.5 * (p1 + p2)
+    else:
+        eps = 0.001
+        nearby_1 = (1 - eps) * p1 + eps * p2
+        nearby_2 = (1 - eps) * p2 + eps * p1
+        # (finite difference) directional derivative in the drection p1→p2, without the 1/eps factor
+        ddt_1 = fn(nearby_1[0], nearby_1[1]) - p1[2]
+        # (finite difference) directional derivative in the drection p2→p1, without the 1/eps factor
+        ddt_2 = fn(nearby_2[0], nearby_2[1]) - p2[2]
+        if np.sign(ddt_1) == np.sign(ddt_2):
+            # signs are the same, so the corresponding lines would not intersect between the two points
+            # just take midpoint
+            return 0.5 * (p1 + p2)
+        else:
+            return lerpByZ(
+                np.array([p1[0], p1[1], ddt_1]), np.array([p2[0], p2[1], ddt_2])
+            )
+
+
+def lerpByZ(p1, p2):
+    """Find the point along the line p1←→p2 where z=0"""
+    return extract_xy((p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2]))
+
+
 class Quadtree(Rect):
     def __init__(self, bounds: Rect, depth: int):
         """+x to the right, +y to the top, so right>left and top>bottom"""
@@ -63,71 +82,27 @@ class Quadtree(Rect):
             Quadtree(Rect(self.left, mx, self.bottom, my), next_depth),
         ]
 
-    def compute_edge_duals(self, vertices_3d, normals, shrunk_region):
-        # Could probably use scipy.optimize here like in compute_face_dual
-        # Though it might be slower than just solving for the intersection
-        # Pro of scipy.optimize: it would find the minimum inside the bounds
-        # instead of finding the minimum, then clipping to the bounds
-        edge_duals_horiz = [
-            np.array(
-                [
-                    np.clip(
-                        intersect_normals(
-                            extract_xz(vertices_3d[i]),
-                            extract_xz(vertices_3d[j]),
-                            extract_xz(normals[i]),
-                            extract_xz(normals[j]),
-                        ),
-                        shrunk_region.left,
-                        shrunk_region.right,
-                    ),
-                    vertices_3d[i][1],
-                ]
-            )
-            for i, j in [(0, 1), (2, 3)]
-        ]
-        edge_duals_vert = [
-            np.array(
-                [
-                    vertices_3d[i][0],
-                    np.clip(
-                        intersect_normals(
-                            extract_yz(vertices_3d[i]),
-                            extract_yz(vertices_3d[j]),
-                            extract_yz(normals[i]),
-                            extract_yz(normals[j]),
-                        ),
-                        shrunk_region.bottom,
-                        shrunk_region.top,
-                    ),
-                ]
-            )
-            for i, j in [(1, 2), (3, 0)]
-        ]
-        # clockwise from the top edge
+    def compute_edge_duals(self, vertices_3d, fn, shrunk_region):
         return [
-            edge_duals_horiz[0],
-            edge_duals_vert[0],
-            edge_duals_horiz[1],
-            edge_duals_vert[1],
+            extract_xy(get_dual_point_between(vertices_3d[i], vertices_3d[j], fn))
+            for i, j in [(0, 1), (1, 2), (2, 3), (3, 0)]
         ]
 
-    def compute_face_dual(self, vertices_3d, normals, shrunk_region):
-        """The normals in XYZ, coupled with the vertices_3d, define four hyperplanes. The goal is to find
-        the point that minimizes the sum of squared distance from the four hyperplanes"""
-        B = [np.dot(n, p) for n, p in zip(normals, vertices_3d)]
+    def compute_face_dual(self, vertices_3d, fn, shrunk_region):
+        # return the center between two diagonal vertices as long as the function value
+        # at the center has a different function sign than the two diagonals
+        a, b, c, d = vertices_3d
+        if np.sign(a[2]) == np.sign(c[2]):
+            center = get_dual_point_between(a, c, fn)
+            if np.sign(fn(center[0], center[1])) != np.sign(a[2]):
+                return center
+        if np.sign(b[2]) == np.sign(d[2]):
+            center = get_dual_point_between(b, d, fn)
+            if np.sign(fn(center[0], center[1])) != np.sign(b[2]):
+                return center
+        return (a + c) / 2
 
-        result = scipy.optimize.lsq_linear(
-            normals,
-            B,
-            bounds=(
-                [shrunk_region.left, shrunk_region.bottom, -np.inf],
-                [shrunk_region.right, shrunk_region.top, np.inf],
-            ),
-        )
-        return result.x
-
-    def compute_duals(self, fn, gradient):
+    def compute_duals(self, fn):
         """Insert dual vertices. In the future, this should only by done for minimal cells
         and should avoid duplicating calculation of `gradient` over the same points for vertices
         shared between two edges"""
@@ -140,19 +115,15 @@ class Quadtree(Rect):
         ]
         values = [fn(v[0], v[1]) for v in self.vertices]
         self.vertex_values = values
-        gradients = [gradient(v[0], v[1]) for v in self.vertices]
-        normals = [np.array([g[0], g[1], -1]) for g in gradients]
-        normals = np.array([n / np.linalg.norm(n) for n in normals])
         vertices3d = np.array(
             [[v[0], v[1], value] for v, value in zip(self.vertices, values)]
         )
         shrunk_region = self.shrunk_by(0.01)
-        self.edge_duals = self.compute_edge_duals(vertices3d, normals, shrunk_region)
+        self.edge_duals = self.compute_edge_duals(vertices3d, fn, shrunk_region)
         self.edge_dual_values = [fn(v[0], v[1]) for v in self.edge_duals]
-        fd = self.compute_face_dual(vertices3d, normals, shrunk_region)
+        fd = self.compute_face_dual(vertices3d, fn, shrunk_region)
         self.face_dual = fd[0:2]
         self.face_dual_value = fn(self.face_dual[0], self.face_dual[1])
-        self.error = np.abs(self.face_dual_value - fd[2])
 
     def directional_duals(self, direction: int):
         """All edge duals, including children, in clockwise order as an iterator

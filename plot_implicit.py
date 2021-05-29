@@ -33,9 +33,9 @@ def march_simplex(points, values):
         pass
 
 
-def plot_implicit(bounds: Rect, fn, gradient):
+def plot_implicit(bounds: Rect, fn):
     """Yields an iterator of line segments (point, point)"""
-    quadtree = generate_quadtree(bounds, fn, gradient)
+    quadtree = generate_quadtree(bounds, fn)
     for leaf in quadtree.leaves():
         duals = list(leaf.all_duals())
         duals_rotated = [*duals[1:], duals[0]]

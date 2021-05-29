@@ -13,14 +13,11 @@ import numpy as np
 MAX_LEAVES = 2 ** 14
 # descend uniformly up to MIN_DEPTH to capture coarse features
 MIN_DEPTH = 5
-# quantifies maximum acceptable deviation from local linearity
-# TODO: This should not be used as a constant because double the function = double the error
-ERROR_THRESHOLD = 10 ** -3
 # X_TOLERANCE and Y_TOLERANCE effectively determine the max depth
 # TODO: compute X and Y tolerance based on x-width and y-width
 #   divided by the screen size (pixels) to exclude details smaller than a pixel
-X_TOLERANCE = 0.02
-Y_TOLERANCE = 0.02
+X_TOLERANCE = 0.005
+Y_TOLERANCE = 0.005
 
 
 def should_descend_quadtree(quad: Quadtree, fn, bounds):
@@ -48,12 +45,12 @@ def should_descend_quadtree(quad: Quadtree, fn, bounds):
     approximated by a linear function such as flat regions of the
     isosurface."""
 
-    if intersects_isoline and quad.error > ERROR_THRESHOLD:
+    if intersects_isoline:
         return True
     return False
 
 
-def generate_quadtree(bounds: Rect, fn, gradient):
+def generate_quadtree(bounds: Rect, fn):
     """we use a top-down contour-finding approach
     that adds cells to the tree by refining the sampling around
     detected contours"""
@@ -86,7 +83,7 @@ def generate_quadtree(bounds: Rect, fn, gradient):
         #  - in should_descend_quadtree, to test if the isoline crosses through the quad
         #  - in leaf nodes, to compute the segments
         # TODO: precompute the function values at midpoints and center, to save time in child nodes
-        current_quad.compute_duals(fn, gradient)
+        current_quad.compute_duals(fn)
         if should_descend_quadtree(current_quad, fn, bounds):
             current_quad.children = current_quad.generate_children()
             for child in current_quad.children:
@@ -102,6 +99,6 @@ def generate_quadtree(bounds: Rect, fn, gradient):
             pass
     # compute duals of leaves in case of breaking early
     for leaf_quad in quad_stack:
-        leaf_quad.compute_duals(fn, gradient)
+        leaf_quad.compute_duals(fn)
 
     return quadtree
