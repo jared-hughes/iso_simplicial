@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-from generate_quadtree import generate_quadtree
+from generate_quadtree import generate_quadtree, Rect
 import numpy as np
 from plot_implicit import plot_implicit
-from quadtree import Rect
 import cProfile, pstats
 
 """

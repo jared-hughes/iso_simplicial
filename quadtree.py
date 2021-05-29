@@ -1,7 +1,5 @@
 from typing import List, Callable
-from dataclasses import dataclass
 import numpy as np
-import scipy.optimize
 
 CYCLIC_PAIRS = [(0, 1), (1, 2), (2, 3), (3, 0)]
 
@@ -11,31 +9,6 @@ def nonlinearity_along_edge(p1, p2, fn):
     return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / np.max(
         np.abs([p1[2], p2[2]])
     )
-
-
-@dataclass
-class Rect:
-    left: float
-    right: float
-    bottom: float
-    top: float
-
-    @property
-    def width(self):
-        return self.right - self.left
-
-    @property
-    def height(self):
-        return self.top - self.bottom
-
-    def shrunk_by(self, e):
-        """e = proportion shrink. Any number > 0 should work to avoid degenerate triangles"""
-        return Rect(
-            e * self.right + (1 - e) * self.left,
-            e * self.left + (1 - e) * self.right,
-            e * self.top + (1 - e) * self.bottom,
-            e * self.bottom + (1 - e) * self.top,
-        )
 
 
 def get_dual_point_between(p1, p2, fn):

@@ -1,6 +1,5 @@
 import numpy as np
-from generate_quadtree import generate_quadtree
-from quadtree import Rect
+from generate_quadtree import generate_quadtree, Rect
 
 
 def weighted_intersection(p1, p2):

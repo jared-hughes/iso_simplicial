@@ -5,8 +5,9 @@ a simple method to create an octree that conforms well to the
 isosurface using the error metric from Section 3
 """
 
-from quadtree import Quadtree, Rect
+from quadtree import Quadtree
 from collections import deque
+from dataclasses import dataclass
 import numpy as np
 
 # arbitrary, can probably be increased
@@ -20,12 +21,20 @@ X_TOLERANCE = 0.005
 Y_TOLERANCE = 0.005
 
 
+@dataclass
+class Rect:
+    left: float
+    right: float
+    bottom: float
+    top: float
+
+
 def should_descend_quadtree(quad: Quadtree, fn, bounds):
     """Assumes quad has dual vertices and values at dual vertices already computed"""
     if quad.depth < MIN_DEPTH:
         # must descend to the minimum depth
         return True
-    if quad.width < 10 * X_TOLERANCE or quad.width < 10 * Y_TOLERANCE:
+    if quad.width < 10 * X_TOLERANCE or quad.height < 10 * Y_TOLERANCE:
         # descending would create a quad with 5×tolerance dimensions,
         # which would sample points at (average) 2.5×tolerance spacing
         # which captures subpixel details (useless) after apply marching simplices
