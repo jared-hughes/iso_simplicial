@@ -5,7 +5,7 @@ a simple method to create an octree that conforms well to the
 isosurface using the error metric from Section 3
 """
 
-from quadtree import Quadtree
+from quadtree import Quadtree, X_TOLERANCE, Y_TOLERANCE
 from collections import deque
 from dataclasses import dataclass
 import numpy as np
@@ -14,11 +14,6 @@ import numpy as np
 MAX_LEAVES = 2 ** 4
 # descend uniformly up to MIN_DEPTH to capture coarse features
 MIN_DEPTH = 5
-# X_TOLERANCE and Y_TOLERANCE effectively determine the max depth
-# TODO: compute X and Y tolerance based on x-width and y-width
-#   divided by the screen size (pixels) to exclude details smaller than a pixel
-X_TOLERANCE = 0.005
-Y_TOLERANCE = 0.005
 
 
 @dataclass

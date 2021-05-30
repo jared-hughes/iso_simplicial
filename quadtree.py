@@ -3,7 +3,14 @@ import numpy as np
 import scipy.optimize
 
 CYCLIC_PAIRS = [(0, 1), (1, 2), (2, 3), (3, 0)]
-GRADIENT_EPS = 0.01
+SHRINK_FACTOR = 0.05
+# X_TOLERANCE and Y_TOLERANCE effectively determine the max depth
+# TODO: compute X and Y tolerance based on x-width and y-width
+#   divided by the screen size (pixels) to exclude details smaller than a pixel
+X_TOLERANCE = 0.005
+Y_TOLERANCE = 0.005
+GRADIENT_EPS_X = X_TOLERANCE / 10
+GRADIENT_EPS_Y = Y_TOLERANCE / 10
 
 
 def nonlinearity_along_edge(p1, p2, fn):
@@ -123,30 +130,19 @@ class Quadtree:
         #     # Maybe doing a lerp of projected gradients would be better
         #     return 0.5 * (p1 + p2)
         # else:
-        derivative_1_2 = self.vertex_gradients[i][axis]
-        derivative_2_1 = self.vertex_gradients[j][axis]
-        if np.sign(derivative_1_2) == np.sign(derivative_2_1):
-            # signs indicate that the intersection between normal
-            # planes would be outside the 1-cell
-            return 0.5 * (p1 + p2)
 
-        normals = [
-            np.array([g[0], g[1], -GRADIENT_EPS]) / GRADIENT_EPS
-            for g in self.vertex_gradients
-        ]
         coord = intersect_normals(
             extract_coord(self.vertices[i], axis),
             extract_coord(self.vertices[j], axis),
-            extract_coord(normals[i], axis),
-            extract_coord(normals[j], axis),
+            extract_coord(self.vertex_gradients[i], axis),
+            extract_coord(self.vertex_gradients[j], axis),
         )
 
-        shrink_factor = 0.05
         x_min, y_min, _ = (
-            self.vertices[3] * (1 - shrink_factor) + shrink_factor * self.vertices[1]
+            self.vertices[3] * (1 - SHRINK_FACTOR) + SHRINK_FACTOR * self.vertices[1]
         )
         x_max, y_max, _ = (
-            self.vertices[3] * shrink_factor + (1 - shrink_factor) * self.vertices[1]
+            self.vertices[3] * SHRINK_FACTOR + (1 - SHRINK_FACTOR) * self.vertices[1]
         )
         coord = np.clip(coord, [x_min, y_min][axis], [x_max, y_max][axis])
         # if self.vertices[0][0] == 1 and self.vertices[0][1] == 0:
@@ -181,53 +177,35 @@ class Quadtree:
 
     def _get_face_dual(self):
         # assume self.vertex_gradients is already computed
-        normals = [np.array([g[0], g[1], -GRADIENT_EPS]) for g in self.vertex_gradients]
-        B = [np.dot(n, p) for n, p in zip(normals, self.vertices)]
+        B = [np.dot(n, p) for n, p in zip(self.vertex_gradients, self.vertices)]
 
-        shrink_factor = 0.01
         x_min, y_min, _ = (
-            self.vertices[3] * (1 - shrink_factor) + shrink_factor * self.vertices[1]
+            self.vertices[3] * (1 - SHRINK_FACTOR) + SHRINK_FACTOR * self.vertices[1]
         )
         x_max, y_max, _ = (
-            self.vertices[3] * shrink_factor + (1 - shrink_factor) * self.vertices[1]
+            self.vertices[3] * SHRINK_FACTOR + (1 - SHRINK_FACTOR) * self.vertices[1]
         )
         result = scipy.optimize.lsq_linear(
-            normals,
+            self.vertex_gradients,
             B,
             bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf]),
         )
         return result.x
 
     def _compute_gradients(self):
-        dx = GRADIENT_EPS * self.width
-        dy = GRADIENT_EPS * self.height
-        a, b, c, d = self.vertices
-        # vertex gradients without the 1/eps factor
+        # gradients of G = f(x,y)-z
+        # we compute these numerically based on a finite difference
+        # TODO: compute these in a parent quad and pass it down
+        # to reduce repeated computation
         self.vertex_gradients = [
             np.array(
                 [
-                    self.fn(a[0] + dx, a[1]) - a[2],
-                    a[2] - self.fn(a[0], a[1] - dy),
+                    (self.fn(v[0] + GRADIENT_EPS_X, v[1]) - v[2]) / GRADIENT_EPS_X,
+                    (self.fn(v[0], v[1] + GRADIENT_EPS_Y) - v[2]) / GRADIENT_EPS_Y,
+                    -1,
                 ]
-            ),
-            np.array(
-                [
-                    b[2] - self.fn(b[0] - dx, b[1]),
-                    b[2] - self.fn(b[0], b[1] - dy),
-                ]
-            ),
-            np.array(
-                [
-                    c[2] - self.fn(c[0] - dx, c[1]),
-                    self.fn(c[0], c[1] + dy) - c[2],
-                ]
-            ),
-            np.array(
-                [
-                    self.fn(d[0] + dx, d[1]) - d[2],
-                    self.fn(d[0], d[1] + dy) - d[2],
-                ]
-            ),
+            )
+            for v in self.vertices
         ]
 
     def compute_duals(self):
