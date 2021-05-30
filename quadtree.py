@@ -11,6 +11,7 @@ X_TOLERANCE = 0.005
 Y_TOLERANCE = 0.005
 GRADIENT_EPS_X = X_TOLERANCE / 10
 GRADIENT_EPS_Y = Y_TOLERANCE / 10
+GRADIENT_EPS_MIN_SQ = min(GRADIENT_EPS_X, GRADIENT_EPS_Y) ** 2
 
 
 def nonlinearity_along_edge(p1, p2, fn):
@@ -18,25 +19,6 @@ def nonlinearity_along_edge(p1, p2, fn):
     return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / np.max(
         np.abs([p1[2], p2[2]])
     )
-
-
-def lerpByZ(p1, p2):
-    """Find the point along the segment p1--p2 where z=0"""
-    if np.sign(p1[2]) == np.sign(p2[2]):
-        # give up, but don't throw an error
-        return (p1 + p2) / 2
-    return (p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2])
-
-
-def extract_coord(p, axis):
-    return np.array([p[axis], p[2]])
-
-
-def intersect_normals(p, q, n, m):
-    """Given 2D vertices p,q and normals n,m, return the intersection coordinate between the lines passing
-    through the vertices and perpendicular to the normals in XZ or YZ space. This coordinate would
-    need to be combined with the other coordinate back in XY space."""
-    return q[0] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
 
 
 class Quadtree:
@@ -122,52 +104,37 @@ class Quadtree:
         ]
 
     def _get_edge_dual_between(self, i: int, j: int):
+        """Solve exactly for the intersection between normal planes"""
         axis = i % 2
-        p1 = self.vertices[i]
-        p2 = self.vertices[j]
-        # if np.sign(p1[2]) != np.sign(p2[2]):
-        #     # the isoline passes somewhere between p1 and p2, so place a dual point mid-way
-        #     # Maybe doing a lerp of projected gradients would be better
-        #     return 0.5 * (p1 + p2)
-        # else:
 
-        coord = intersect_normals(
-            extract_coord(self.vertices[i], axis),
-            extract_coord(self.vertices[j], axis),
-            extract_coord(self.vertex_gradients[i], axis),
-            extract_coord(self.vertex_gradients[j], axis),
-        )
+        p = self.vertices[i]
+        q = self.vertices[j]
+        m = self.vertex_gradients[i]
+        n = self.vertex_gradients[j]
+        dot = m[axis] * (q[axis] - p[axis]) + m[2] * (q[2] - p[2])
+        det = m[axis] * n[2] - m[2] * n[axis]
 
-        x_min, y_min, _ = (
-            self.vertices[3] * (1 - SHRINK_FACTOR) + SHRINK_FACTOR * self.vertices[1]
+        if np.abs(det) < GRADIENT_EPS_MIN_SQ:
+            return self._apply_func_to(0.5 * (p + q))
+
+        coord = q[axis] - m[2] * dot / det
+
+        coord_min = (
+            self.vertices[3][axis] * (1 - SHRINK_FACTOR)
+            + self.vertices[1][axis] * SHRINK_FACTOR
         )
-        x_max, y_max, _ = (
-            self.vertices[3] * SHRINK_FACTOR + (1 - SHRINK_FACTOR) * self.vertices[1]
+        coord_max = (
+            self.vertices[1][axis] * (1 - SHRINK_FACTOR)
+            + self.vertices[3][axis] * SHRINK_FACTOR
         )
-        coord = np.clip(coord, [x_min, y_min][axis], [x_max, y_max][axis])
-        # if self.vertices[0][0] == 1 and self.vertices[0][1] == 0:
-        #     print(self.depth, "normals", normals)
-        #     print("coord", coord)
+        coord = np.clip(coord, coord_min, coord_max)
+
         if axis == 0:
-            return np.array([coord, self.vertices[i][1], 0])
+            y = p[1]
+            return np.array([coord, y, self.fn(coord, y)])
         else:
-            return np.array([self.vertices[i][0], coord, 0])
-        # WHY AM I STRUGGLING? THIS WAS WORKING EARLIER
-        # if self.vertices[0][0] == 1 and self.vertices[0][1] == 0 and self.depth == 2:
-        #     print(i, j, derivative_1_2 / GRADIENT_EPS, derivative_2_1 / GRADIENT_EPS)
-        # def intersect_normals(p, q, n, m):
-        #     """Given vertices p,q and normals n,m, return the intersection coordinate between the lines passing
-        #     through the vertices and perpendicular to the normals in XZ or YZ space. This coordinate would
-        #     need to be combined with the other coordinate back in XY space."""
-        #     return q[0] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
-        # n = np.array([derivative_1_2, -GRADIENT_EPS])
-        # m = np.array([derivative_2_1, -GRADIENT_EPS])
-        # p = np.array([p1[axis], p1[2]])
-        # q = np.array([p2[axis], p2[2]])
-        # int_coord = q[axis] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
-        # return np.array(
-        #     [int_coord if axis == 0 else p1[0], int_coord if axis == 1 else p1[1], 0]
-        # )
+            x = p[0]
+            return np.array([x, coord, self.fn(x, coord)])
 
     def _get_edge_duals(self):
         return [
