@@ -12,6 +12,11 @@ dient is well-defined almost everywhere. Places where the
 gradient is not defined are sharp features of the function.
 """
 
+
+def symsqrt(x):
+    return -np.sqrt(-x) if x < 0 else np.sqrt(x)
+
+
 examples = [
     [lambda x, y: y - np.sin(5 * x), Rect(-2, 2, -1.5, 1.5)],
     [lambda x, y: x * x + y * y - 4, Rect(-3, 3, -3, 3)],
@@ -27,9 +32,20 @@ examples = [
         Rect(-4, 4, -2, 2),
     ],
     [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
+    [
+        lambda x, y: symsqrt(
+            (x - 0.2) ** 2
+            + 100 * (y + 0.3) ** 2
+            - 2
+            + 16 * x * (y - 0.2)
+            + 16 * np.sin(2 * x - 1.5)
+        ),
+        Rect(-2, 2, -2, 2),
+    ],
+    [lambda x, y: y + 0.3 - np.abs(x - 1.2), Rect(-2, 2, -2, 2)],
 ]
 
-fn, bounds = examples[0]
+fn, bounds = examples[-2]
 
 profiler = cProfile.Profile()
 profiler.enable()

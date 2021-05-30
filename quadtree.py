@@ -1,7 +1,9 @@
 from typing import List, Callable
 import numpy as np
+import scipy.optimize
 
 CYCLIC_PAIRS = [(0, 1), (1, 2), (2, 3), (3, 0)]
+GRADIENT_EPS = 0.01
 
 
 def nonlinearity_along_edge(p1, p2, fn):
@@ -11,37 +13,23 @@ def nonlinearity_along_edge(p1, p2, fn):
     )
 
 
-def get_dual_point_between(p1, p2, fn):
-    """Assumes the value of the points are not NaN/Infinity and
-    they are stored as [x, y, f(x,y)]"""
-    if np.sign(p1[2]) != np.sign(p2[2]):
-        # the isoline passes somewhere between p1 and p2, so place a dual point mid-way
-        # Maybe doing a lerp of projected gradients would be better
-        return 0.5 * (p1 + p2)
-    else:
-        eps = 0.001
-        nearby_1 = (1 - eps) * p1 + eps * p2
-        nearby_2 = (1 - eps) * p2 + eps * p1
-        # (finite difference) directional derivative in the drection p1→p2, without the 1/eps factor
-        ddt_1 = fn(nearby_1[0], nearby_1[1]) - p1[2]
-        # (finite difference) directional derivative in the drection p2→p1, without the 1/eps factor
-        ddt_2 = fn(nearby_2[0], nearby_2[1]) - p2[2]
-        if np.sign(ddt_1) == np.sign(ddt_2):
-            # signs are the same, so the corresponding lines would not intersect between the two points
-            # just take midpoint
-            return 0.5 * (p1 + p2)
-        else:
-            return lerpByZ(
-                np.array([p1[0], p1[1], ddt_1]), np.array([p2[0], p2[1], ddt_2])
-            )
-
-
 def lerpByZ(p1, p2):
     """Find the point along the segment p1--p2 where z=0"""
     if np.sign(p1[2]) == np.sign(p2[2]):
         # give up, but don't throw an error
         return (p1 + p2) / 2
     return (p2[2] * p1 - p1[2] * p2) / (p2[2] - p1[2])
+
+
+def extract_coord(p, axis):
+    return np.array([p[axis], p[2]])
+
+
+def intersect_normals(p, q, n, m):
+    """Given 2D vertices p,q and normals n,m, return the intersection coordinate between the lines passing
+    through the vertices and perpendicular to the normals in XZ or YZ space. This coordinate would
+    need to be combined with the other coordinate back in XY space."""
+    return q[0] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
 
 
 class Quadtree:
@@ -126,30 +114,125 @@ class Quadtree:
             ),
         ]
 
+    def _get_edge_dual_between(self, i: int, j: int):
+        axis = i % 2
+        p1 = self.vertices[i]
+        p2 = self.vertices[j]
+        # if np.sign(p1[2]) != np.sign(p2[2]):
+        #     # the isoline passes somewhere between p1 and p2, so place a dual point mid-way
+        #     # Maybe doing a lerp of projected gradients would be better
+        #     return 0.5 * (p1 + p2)
+        # else:
+        derivative_1_2 = self.vertex_gradients[i][axis]
+        derivative_2_1 = self.vertex_gradients[j][axis]
+        if np.sign(derivative_1_2) == np.sign(derivative_2_1):
+            # signs indicate that the intersection between normal
+            # planes would be outside the 1-cell
+            return 0.5 * (p1 + p2)
+
+        normals = [
+            np.array([g[0], g[1], -GRADIENT_EPS]) / GRADIENT_EPS
+            for g in self.vertex_gradients
+        ]
+        coord = intersect_normals(
+            extract_coord(self.vertices[i], axis),
+            extract_coord(self.vertices[j], axis),
+            extract_coord(normals[i], axis),
+            extract_coord(normals[j], axis),
+        )
+
+        shrink_factor = 0.05
+        x_min, y_min, _ = (
+            self.vertices[3] * (1 - shrink_factor) + shrink_factor * self.vertices[1]
+        )
+        x_max, y_max, _ = (
+            self.vertices[3] * shrink_factor + (1 - shrink_factor) * self.vertices[1]
+        )
+        coord = np.clip(coord, [x_min, y_min][axis], [x_max, y_max][axis])
+        # if self.vertices[0][0] == 1 and self.vertices[0][1] == 0:
+        #     print(self.depth, "normals", normals)
+        #     print("coord", coord)
+        if axis == 0:
+            return np.array([coord, self.vertices[i][1], 0])
+        else:
+            return np.array([self.vertices[i][0], coord, 0])
+        # WHY AM I STRUGGLING? THIS WAS WORKING EARLIER
+        # if self.vertices[0][0] == 1 and self.vertices[0][1] == 0 and self.depth == 2:
+        #     print(i, j, derivative_1_2 / GRADIENT_EPS, derivative_2_1 / GRADIENT_EPS)
+        # def intersect_normals(p, q, n, m):
+        #     """Given vertices p,q and normals n,m, return the intersection coordinate between the lines passing
+        #     through the vertices and perpendicular to the normals in XZ or YZ space. This coordinate would
+        #     need to be combined with the other coordinate back in XY space."""
+        #     return q[0] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
+        # n = np.array([derivative_1_2, -GRADIENT_EPS])
+        # m = np.array([derivative_2_1, -GRADIENT_EPS])
+        # p = np.array([p1[axis], p1[2]])
+        # q = np.array([p2[axis], p2[2]])
+        # int_coord = q[axis] - m[1] * np.dot(n, q - p) / np.linalg.det([n, m])
+        # return np.array(
+        #     [int_coord if axis == 0 else p1[0], int_coord if axis == 1 else p1[1], 0]
+        # )
+
     def _get_edge_duals(self):
         return [
-            self._apply_func_to(
-                get_dual_point_between(self.vertices[i], self.vertices[j], self.fn)
-            )
+            self._apply_func_to(self._get_edge_dual_between(i, j))
             for i, j in CYCLIC_PAIRS
         ]
 
     def _get_face_dual(self):
-        # return the center between two diagonal vertices as long as the function value
-        # at the center has a different function sign than the two diagonals
+        # assume self.vertex_gradients is already computed
+        normals = [np.array([g[0], g[1], -GRADIENT_EPS]) for g in self.vertex_gradients]
+        B = [np.dot(n, p) for n, p in zip(normals, self.vertices)]
+
+        shrink_factor = 0.01
+        x_min, y_min, _ = (
+            self.vertices[3] * (1 - shrink_factor) + shrink_factor * self.vertices[1]
+        )
+        x_max, y_max, _ = (
+            self.vertices[3] * shrink_factor + (1 - shrink_factor) * self.vertices[1]
+        )
+        result = scipy.optimize.lsq_linear(
+            normals,
+            B,
+            bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf]),
+        )
+        return result.x
+
+    def _compute_gradients(self):
+        dx = GRADIENT_EPS * self.width
+        dy = GRADIENT_EPS * self.height
         a, b, c, d = self.vertices
-        if np.sign(a[2]) == np.sign(c[2]):
-            center = get_dual_point_between(a, c, self.fn)
-            if np.sign(self.fn(center[0], center[1])) != np.sign(a[2]):
-                return center
-        if np.sign(b[2]) == np.sign(d[2]):
-            center = get_dual_point_between(b, d, self.fn)
-            if np.sign(self.fn(center[0], center[1])) != np.sign(b[2]):
-                return center
-        return self._apply_func_to((a + c) / 2)
+        # vertex gradients without the 1/eps factor
+        self.vertex_gradients = [
+            np.array(
+                [
+                    self.fn(a[0] + dx, a[1]) - a[2],
+                    a[2] - self.fn(a[0], a[1] - dy),
+                ]
+            ),
+            np.array(
+                [
+                    b[2] - self.fn(b[0] - dx, b[1]),
+                    b[2] - self.fn(b[0], b[1] - dy),
+                ]
+            ),
+            np.array(
+                [
+                    c[2] - self.fn(c[0] - dx, c[1]),
+                    self.fn(c[0], c[1] + dy) - c[2],
+                ]
+            ),
+            np.array(
+                [
+                    self.fn(d[0] + dx, d[1]) - d[2],
+                    self.fn(d[0], d[1] + dy) - d[2],
+                ]
+            ),
+        ]
 
     def compute_duals(self):
         """Insert dual vertices. In the future, this should only be done for minimal cells"""
+        self._compute_gradients()
         self.edge_duals = self._get_edge_duals()
         self.face_dual = self._get_face_dual()
         self.nonlinearity = np.max(
