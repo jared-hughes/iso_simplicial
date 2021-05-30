@@ -190,7 +190,7 @@ class Quadtree:
             B,
             bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf]),
         )
-        return result.x
+        return self._apply_func_to(result.x)
 
     def _compute_gradients(self):
         # gradients of G = f(x,y)-z
