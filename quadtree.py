@@ -9,6 +9,7 @@ SHRINK_FACTOR = 0.05
 #   divided by the screen size (pixels) to exclude details smaller than a pixel
 X_TOLERANCE = 0.005
 Y_TOLERANCE = 0.005
+NORM_TOLERANCE = X_TOLERANCE ** 2 + Y_TOLERANCE ** 2
 GRADIENT_EPS_X = X_TOLERANCE / 10
 GRADIENT_EPS_Y = Y_TOLERANCE / 10
 GRADIENT_EPS_MIN_SQ = min(GRADIENT_EPS_X, GRADIENT_EPS_Y) ** 2
@@ -16,6 +17,7 @@ GRADIENT_EPS_MIN_SQ = min(GRADIENT_EPS_X, GRADIENT_EPS_Y) ** 2
 
 def nonlinearity_along_edge(p1, p2, fn):
     midpoint = (p1 + p2) / 2
+    # TODO: handle p1[2] == p2[2] == 0
     return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / np.max(
         np.abs([p1[2], p2[2]])
     )
@@ -156,6 +158,10 @@ class Quadtree:
             self.vertex_gradients,
             B,
             bounds=([x_min, y_min, -np.inf], [x_max, y_max, np.inf]),
+            method="bvls",
+            # if within `distance` of the correct minimum,
+            # then the cost function is at least `distance**2`
+            tol=NORM_TOLERANCE,
         )
         return self._apply_func_to(result.x)
 

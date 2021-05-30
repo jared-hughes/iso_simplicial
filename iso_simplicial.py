@@ -31,6 +31,7 @@ examples = [
         + 5 * np.sin(5 * y),
         Rect(-4, 4, -2, 2),
     ],
+    # following example currently has trouble with the discontinuity, TODO
     [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
     [
         lambda x, y: symsqrt(
@@ -42,10 +43,12 @@ examples = [
         ),
         Rect(-2, 2, -2, 2),
     ],
-    [lambda x, y: y + 0.3 - np.abs(x - 1.2), Rect(-2, 2, -2, 2)],
+    # following example currently has trouble with the isoline passing
+    # through vertices, TODO
+    [lambda x, y: y + 0.3 - np.abs(x - 1.2) - 0.01, Rect(-2, 2, -2, 2)],
 ]
 
-fn, bounds = examples[-2]
+fn, bounds = examples[7]
 
 profiler = cProfile.Profile()
 profiler.enable()

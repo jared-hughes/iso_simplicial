@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 
 # arbitrary, can probably be increased
-MAX_LEAVES = 2 ** 4
+MAX_LEAVES = 2 ** 12
 # descend uniformly up to MIN_DEPTH to capture coarse features
 MIN_DEPTH = 5
 
