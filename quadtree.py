@@ -17,9 +17,8 @@ GRADIENT_EPS_MIN_SQ = min(GRADIENT_EPS_X, GRADIENT_EPS_Y) ** 2
 
 def nonlinearity_along_edge(p1, p2, fn):
     midpoint = (p1 + p2) / 2
-    # TODO: handle p1[2] == p2[2] == 0
-    return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / np.max(
-        np.abs([p1[2], p2[2]])
+    return np.abs(p1[2] - 2 * fn(midpoint[0], midpoint[1]) + p2[2]) / max(
+        abs(p1[2]), abs(p2[2]), 1e-250
     )
 
 
@@ -218,17 +217,17 @@ class Quadtree:
             yield from child.leaves()
 
     def __str__(self):
-        return f"Quadtree[depth={self.depth}, {self.left}≤x≤{self.right}, {self.bottom}≤y≤{self.top}, children:{len(self.children)}]"
+        return f"Quadtree[depth={self.depth}, children:{len(self.children)}]"
 
     def visualize_borders(self):
         """Returns a list of points [x: str | float, y: str | float] which draw the quadtree when connected in Desmos"""
         if len(self.children) > 0:
             yield self.edge_midpoints[0]
             yield self.edge_midpoints[2]
-            yield ["0/0", "0"]
+            yield None
             yield self.edge_midpoints[3]
             yield self.edge_midpoints[1]
-            yield ["0/0", "0"]
+            yield None
         for child in self.children:
             yield from child.visualize_borders()
 

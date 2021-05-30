@@ -15,24 +15,31 @@ def march_simplex(points: np.ndarray):
     That would mess with the sign() function, and can cause division by zero if two function values are 0.
     Can be worked around, TODO"""
     values = points[:, 2]
-    num_pos = np.sum(values > 0)
-    num_neg = np.sum(values < 0)
-    if num_neg > num_pos:
-        # negating all values does not affect intersections
-        values = -values
-    if num_neg != 0 and num_pos != 0:
-        # now, two values should be positive and one should be negative
-        i = np.where(values < 0)[0][0]
-        j = (i + 1) % 3
-        k = (i + 2) % 3
-        yield (
-            weighted_intersection(points[i], points[j]),
-            weighted_intersection(points[i], points[k]),
-        )
-    else:
-        # The function may not pass through this simplex
-        # don't yield anything
-        pass
+    zero_indices = np.where(values == 0)
+    num_zeros = np.size(zero_indices)
+    pos_indices = np.where(values > 0)
+    num_pos = np.size(pos_indices)
+    neg_indices = np.where(values < 0)
+    num_neg = np.size(neg_indices)
+    if num_zeros >= 2:
+        # num_zeros == 2 handles the case where the isoline passes through two vertices
+        # no unique answer for num_zeros == 3, but we handle it here to avoid division by 0
+        yield (points[zero_indices[0][0]], points[zero_indices[0][1]])
+    elif num_pos > 0 and num_neg > 0:
+        if num_zeros == 1:
+            i = zero_indices[0][0]
+            yield (
+                points[i],
+                weighted_intersection(points[(i + 1) % 3], points[(i + 2) % 3]),
+            )
+        else:
+            i = neg_indices[0][0] if num_neg == 1 else pos_indices[0][0]
+            j = (i + 1) % 3
+            k = (i + 2) % 3
+            yield (
+                weighted_intersection(points[i], points[j]),
+                weighted_intersection(points[i], points[k]),
+            )
 
 
 def plot_implicit(bounds: Rect, fn):

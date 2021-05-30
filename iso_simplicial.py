@@ -33,6 +33,7 @@ examples = [
     ],
     # following example currently has trouble with the discontinuity, TODO
     [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
+    # following example looks rough, TODO
     [
         lambda x, y: symsqrt(
             (x - 0.2) ** 2
@@ -43,9 +44,7 @@ examples = [
         ),
         Rect(-2, 2, -2, 2),
     ],
-    # following example currently has trouble with the isoline passing
-    # through vertices, TODO
-    [lambda x, y: y + 0.3 - np.abs(x - 1.2) - 0.01, Rect(-2, 2, -2, 2)],
+    [lambda x, y: y + 0.3 - np.abs(x - 1.2), Rect(-2, 2, -2, 2)],
 ]
 
 fn, bounds = examples[7]
@@ -63,7 +62,7 @@ with open("profile.log", "w") as stream:
 # setTimeout(() => {window.navigator.clipboard.readText().then(text => text.split("\n").map((line, i) => Calc.setExpression({id: `clip_${i}`, latex: line, lines: i < 2})))}, 1000)
 # Use https://gist.github.com/jared-hughes/1bab5d94e2ad0ab326180a21e3f955c0 to bypass Desmos's 10000 point limit
 def pointLatex(p):
-    return f"({p[0]},{p[1]})"
+    return "(0/0,0)" if p is None else "({:.6f},{:.6f})".format(p[0], p[1])
 
 
 def listLatex(L):
