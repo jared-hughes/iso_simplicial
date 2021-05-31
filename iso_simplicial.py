@@ -32,7 +32,7 @@ examples = [
         Rect(-4, 4, -2, 2),
     ],
     [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
-    # following example looks rough, TODO
+    # following example looks rough, TODO. Seems to just be poorly-placed dual vertices
     [
         lambda x, y: symsqrt(
             (x - 0.2) ** 2
@@ -46,7 +46,7 @@ examples = [
     [lambda x, y: y + 0.3 - np.abs(x - 1.2), Rect(-2, 2, -2, 2)],
 ]
 
-fn, bounds = examples[5]
+fn, bounds = examples[6]
 
 profiler = cProfile.Profile()
 profiler.enable()

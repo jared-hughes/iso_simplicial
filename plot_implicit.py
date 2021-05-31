@@ -11,9 +11,6 @@ def weighted_intersection(p1, p2):
 
 
 def march_simplex(points: np.ndarray):
-    """Assumes there's no function values 0 (i.e. assumes the isoline does NOT pass through the vertices)
-    That would mess with the sign() function, and can cause division by zero if two function values are 0.
-    Can be worked around, TODO"""
     values = points[:, 2]
     zero_indices = np.where(values == 0)
     num_zeros = np.size(zero_indices)
