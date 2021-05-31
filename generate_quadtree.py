@@ -35,10 +35,8 @@ def should_descend_quadtree(quad: Quadtree, fn, bounds):
         # which captures subpixel details (useless) after apply marching simplices
         return False
 
-    # TODO: maybe use the midpoint + center function values (instead of the dual values)
-    #   to test for isoline intersection. This will remove the need to compute duals on
-    #   non-leaf quads (saving time) but will reduce the power of the test
-    #   (greater chance to not detect an intersection)
+    # Here, we only check for containing two points with z values that cross 0
+    # If we check for jumps, there are false negatives
     intersects_isoline = False
     sign = np.sign(quad.face_dual[2])
     for v in [*quad.vertices, *quad.edge_duals]:

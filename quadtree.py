@@ -34,6 +34,7 @@ class Quadtree:
         self.depth = depth
         self.fn = fn
         self.children: List[Quadtree] = []
+        self._intersects_isoline = None
 
     def _apply_func_to(self, p: np.ndarray):
         """Mutates p"""
@@ -191,6 +192,29 @@ class Quadtree:
                 for i, j in CYCLIC_PAIRS + [(0, 2), (1, 3)]
             ]
         )
+
+    @property
+    def intersects_isoline(self):
+        if self._intersects_isoline != None:
+            return self._intersects_isoline
+        for i, j in CYCLIC_PAIRS + [(0, 2), (1, 3)]:
+            v1 = self.vertices[i]
+            v2 = self.vertices[j]
+            diff = v1 - v2
+            diff_xy = np.array([diff[0], diff[1], 0])
+            if (
+                # Opposite signs: must cross on different sides of 0
+                np.sign(v1[2]) != np.sign(v2[2])
+                # Dot with gradient: check if the gradient indicates that the crossing
+                # is a jump (e.g. +∞ to -∞) rather than continuous through 0
+                and np.dot(self.vertex_gradients[i], diff_xy) * np.sign(v1[2]) >= 0
+                and np.dot(self.vertex_gradients[j], diff_xy) * np.sign(v2[2]) <= 0
+            ):
+                self._intersects_isoline = True
+                return True
+        else:
+            self._intersects_isoline = False
+            return False
 
     """ Following are debug functions """
 

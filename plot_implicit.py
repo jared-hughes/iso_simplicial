@@ -46,6 +46,8 @@ def plot_implicit(bounds: Rect, fn):
     """Yields an iterator of line segments (point, point)"""
     quadtree = generate_quadtree(bounds, fn)
     for leaf in quadtree.leaves():
+        if not leaf.intersects_isoline:
+            continue
         duals = list(leaf.all_duals())
         duals_rotated = [*duals[1:], duals[0]]
         for p2, p3 in zip(duals, duals_rotated):
