@@ -32,7 +32,6 @@ examples = [
         Rect(-4, 4, -2, 2),
     ],
     [lambda x, y: np.tan(x * y), Rect(-5, 5, -5, 5)],
-    # following example looks rough, TODO. Seems to just be poorly-placed dual vertices
     [
         lambda x, y: symsqrt(
             (x - 0.2) ** 2
