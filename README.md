@@ -1,7 +1,5 @@
 # Iso simplicial
 
-**Note: development has moved to https://github.com/jared-hughes/manim/tree/implicit-plotting. This repository will not be updated.**
-
 Given a function and its gradient, this constructs an isosurface based on the method in
 [Manson, Josiah, and Scott Schaefer. "Isosurfaces over simplicial partitions of multiresolution grids." Computer Graphics Forum. Vol. 29. No. 2. Oxford, UK: Blackwell Publishing Ltd, 2010.](https://people.engr.tamu.edu/schaefer/research/iso_simplicial.pdf)
 
